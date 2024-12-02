@@ -1,6 +1,32 @@
 import customtkinter as ctk
 from tkinter import messagebox
 import tkinter as tk
+import re
+
+def validate_site(site):
+    """
+    Valide le format d'une URL de site.
+    Retourne True si le format est valide, sinon False.
+    """
+    pattern = r"^(https?:\/\/)?([a-zA-Z0-9\.-]+)\.([a-zA-Z]{2,6})([\/\w \.-]*)*\/?$"
+    return re.match(pattern, site)
+
+def validate_password_strength(password):
+    """
+    Valide la robustesse d'un mot de passe.
+    Retourne True si le mot de passe est suffisamment robuste, sinon False.
+    """
+    if len(password) < 8:
+        raise ValueError("Le mot de passe doit comporter au moins 8 caractères.")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("Le mot de passe doit contenir au moins une lettre majuscule.")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("Le mot de passe doit contenir au moins une lettre minuscule.")
+    if not re.search(r"[0-9]", password):
+        raise ValueError("Le mot de passe doit contenir au moins un chiffre.")
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        raise ValueError("Le mot de passe doit contenir au moins un caractère spécial.")
+    return True
 
 class AddPasswordDialog(ctk.CTkToplevel):
     def __init__(self, parent, manager):
@@ -35,24 +61,39 @@ class AddPasswordDialog(ctk.CTkToplevel):
         ctk.CTkButton(button_frame, text="Annuler", 
                      command=self.destroy).pack(side=tk.LEFT, padx=5)
 
-    def add_password(self):
-        """Ajoute le mot de passe"""
-        if self.password_entry.get() != self.confirm_entry.get():
-            messagebox.showerror("Erreur", "Les mots de passe ne correspondent pas!")
-            return
+def add_password(self):
+    """Ajoute le mot de passe avec validation et gestion des erreurs."""
+    try:
+        # Récupération des champs d'entrée
+        site = self.site_entry.get()
+        username = self.username_entry.get()
+        password = self.password_entry.get()
+        confirm_password = self.confirm_entry.get()
+
+        # Validation des mots de passe
+        if password != confirm_password:
+            raise ValueError("Les mots de passe ne correspondent pas!")
         
-        if not self.site_entry.get() or not self.username_entry.get():
-            messagebox.showerror("Erreur", "Veuillez remplir tous les champs!")
-            return
+        # Validation des champs obligatoires
+        if not site or not username:
+            raise ValueError("Veuillez remplir tous les champs!")
         
-        success, message = self.manager.add_password(
-            self.site_entry.get(),
-            self.username_entry.get(),
-            self.password_entry.get()
-        )
+        # Validation du format du site
+        if not validate_site(site):
+            raise ValueError("Le format du site est invalide. Utilisez une URL correcte.")
         
+        # Validation de la robustesse du mot de passe
+        validate_password_strength(password)
+
+        # Ajout du mot de passe via le manager
+        success, message = self.manager.add_password(site, username, password)
+
         if success:
             messagebox.showinfo("Succès", message)
             self.destroy()
         else:
-            messagebox.showerror("Erreur", message)
+            raise ValueError(message)
+    except ValueError as ve:
+        messagebox.showerror("Erreur", str(ve))
+    except Exception as e:
+        messagebox.showerror("Erreur", f"Erreur inattendue : {str(e)}")
