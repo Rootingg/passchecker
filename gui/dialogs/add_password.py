@@ -61,39 +61,39 @@ class AddPasswordDialog(ctk.CTkToplevel):
         ctk.CTkButton(button_frame, text="Annuler", 
                      command=self.destroy).pack(side=tk.LEFT, padx=5)
 
-def add_password(self):
-    """Ajoute le mot de passe avec validation et gestion des erreurs."""
-    try:
-        # Récupération des champs d'entrée
-        site = self.site_entry.get()
-        username = self.username_entry.get()
-        password = self.password_entry.get()
-        confirm_password = self.confirm_entry.get()
+    def add_password(self):
+        """Ajoute le mot de passe avec validation et gestion des erreurs."""
+        try:
+            # Récupération des champs d'entrée
+            site = self.site_entry.get()
+            username = self.username_entry.get()
+            password = self.password_entry.get()
+            confirm_password = self.confirm_entry.get()
 
-        # Validation des mots de passe
-        if password != confirm_password:
-            raise ValueError("Les mots de passe ne correspondent pas!")
-        
-        # Validation des champs obligatoires
-        if not site or not username:
-            raise ValueError("Veuillez remplir tous les champs!")
-        
-        # Validation du format du site
-        if not validate_site(site):
-            raise ValueError("Le format du site est invalide. Utilisez une URL correcte.")
-        
-        # Validation de la robustesse du mot de passe
-        validate_password_strength(password)
+            # Validation des mots de passe
+            if password != confirm_password:
+                raise ValueError("Les mots de passe ne correspondent pas!")
+            
+            # Validation des champs obligatoires
+            if not site or not username:
+                raise ValueError("Veuillez remplir tous les champs!")
+            
+            # Validation du format du site
+            if not validate_site(site):
+                raise ValueError("Le format du site est invalide. Utilisez une URL correcte.")
+            
+            # Validation de la robustesse du mot de passe
+            validate_password_strength(password)
 
-        # Ajout du mot de passe via le manager
-        success, message = self.manager.add_password(site, username, password)
+            # Ajout du mot de passe via le manager
+            success, message = self.manager.add_password(site, username, password)
 
-        if success:
-            messagebox.showinfo("Succès", message)
-            self.destroy()
-        else:
-            raise ValueError(message)
-    except ValueError as ve:
-        messagebox.showerror("Erreur", str(ve))
-    except Exception as e:
-        messagebox.showerror("Erreur", f"Erreur inattendue : {str(e)}")
+            if success:
+                messagebox.showinfo("Succès", message)
+                self.destroy()
+            else:
+                raise ValueError(message)
+        except ValueError as ve:
+            messagebox.showerror("Erreur", str(ve))
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur inattendue : {str(e)}")
