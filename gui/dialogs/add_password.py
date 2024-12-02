@@ -8,7 +8,12 @@ def validate_site(site):
     Valide le format d'une URL de site.
     Retourne True si le format est valide, sinon False.
     """
-    pattern = r"^(https?:\/\/)?([a-zA-Z0-9\.-]+)\.([a-zA-Z]{2,6})([\/\w \.-]*)*\/?$"
+    pattern = (
+        r"^(https?:\/\/)?"                # Protocole HTTP/HTTPS
+        r"(([a-zA-Z0-9-_]+\.)+[a-zA-Z]{2,})"  # Sous-domaines et domaine
+        r"(:[0-9]{1,5})?"                # Ports optionnels
+        r"(\/[a-zA-Z0-9@:%._\+~#?&//=]*)?$"  # Chemin d'accès
+    )
     return re.match(pattern, site)
 
 def validate_password_strength(password):
