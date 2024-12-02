@@ -76,8 +76,16 @@ class PasswordDetailsDialog(ctk.CTkToplevel):
         messagebox.showinfo("Succès", "Mot de passe copié dans le presse-papiers")
         self.manager.add_to_history(self.password_id, "COPIE", "Mot de passe copié")
 
+    # Modification dans password_details.py
     def delete_password(self):
-        """Supprime le mot de passe"""
-        if messagebox.askyesno("Confirmer", "Voulez-vous vraiment supprimer ce mot de passe ?"):
-            if self.manager.delete_password(self.password_id):
+        """Supprime le mot de passe et toutes les données associées"""
+        if messagebox.askyesno("Confirmer", "Voulez-vous vraiment supprimer ce mot de passe et ses données associées ?"):
+            try:
+                self.manager.cursor.execute('DELETE FROM historique WHERE password_id = ?', (self.password_id,))
+                self.manager.cursor.execute('DELETE FROM favoris WHERE password_id = ?', (self.password_id,))
+                self.manager.delete_password(self.password_id)
+                self.manager.connection.commit()
+                messagebox.showinfo("Succès", "Mot de passe et données associées supprimés avec succès")
                 self.destroy()
+            except Exception as e:
+                messagebox.showerror("Erreur", f"Erreur lors de la suppression : {str(e)}")
