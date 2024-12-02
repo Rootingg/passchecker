@@ -61,14 +61,24 @@ class PasswordDetailsDialog(ctk.CTkToplevel):
         self.fav_text.set("♥ Retirer des favoris" if is_fav else "♡ Ajouter aux favoris")
         
     def toggle_favorite(self):
-        """Ajoute ou retire des favoris"""
-        if self.manager.is_favorite(self.password_id):
-            self.manager.remove_from_favorites(self.password_id)
-            self.manager.add_to_history(self.password_id, "FAVORI", "Retiré des favoris")
-        else:
-            self.manager.add_to_favorites(self.password_id)
-            self.manager.add_to_history(self.password_id, "FAVORI", "Ajouté aux favoris")
-        self.update_favorite_button_text()
+        """Ajoute ou retire des favoris, avec vérification de la persistance"""
+        try:
+            if self.manager.is_favorite(self.password_id):
+                self.manager.remove_from_favorites(self.password_id)
+                self.manager.add_to_history(self.password_id, "FAVORI", "Retiré des favoris")
+            else:
+                self.manager.add_to_favorites(self.password_id)
+                self.manager.add_to_history(self.password_id, "FAVORI", "Ajouté aux favoris")
+            
+            # Vérification de la persistance
+            if self.manager.is_favorite(self.password_id):
+                messagebox.showinfo("Succès", "Le mot de passe est désormais en favoris")
+            else:
+                messagebox.showinfo("Succès", "Le mot de passe a été retiré des favoris")
+                
+            self.update_favorite_button_text()
+        except Exception as e:
+            messagebox.showerror("Erreur", f"Erreur lors de la modification du favori : {str(e)}")
 
     def copy_to_clipboard(self, text):
         """Copie le texte dans le presse-papiers"""
