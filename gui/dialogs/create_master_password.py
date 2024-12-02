@@ -9,7 +9,7 @@ class CreateMasterPasswordDialog:
         
         self.dialog = ctk.CTkToplevel(parent)
         self.dialog.title("Créer un mot de passe maître")
-        self.dialog.geometry("400x200")
+        self.dialog.geometry("400x300")
         self.dialog.transient(parent)
         
         ctk.CTkLabel(self.dialog, text="Créez votre mot de passe maître:").pack(pady=5)
@@ -22,7 +22,7 @@ class CreateMasterPasswordDialog:
         
         ctk.CTkButton(self.dialog, text="Créer", command=self.validate).pack(pady=20)
         
-        self.dialog.protocol("WM_DELETE_WINDOW", self.cancel)
+        self.dialog.protocol("WM_DELETE_WINDOW")
         self.dialog.grab_set()
         parent.wait_window(self.dialog)
 
