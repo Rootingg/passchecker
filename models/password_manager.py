@@ -28,7 +28,8 @@ class PasswordManager:
             CREATE TABLE IF NOT EXISTS master_password (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 salt BLOB NOT NULL,
-                key_hash TEXT NOT NULL
+                key_hash TEXT NOT NULL,
+                encryption_key BLOB NOT NULL
             )
         ''')
         
@@ -38,7 +39,9 @@ class PasswordManager:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 site TEXT NOT NULL,
                 username TEXT NOT NULL,
-                encrypted_password TEXT NOT NULL
+                encrypted_password TEXT NOT NULL,
+                key_id INTEGER NOT NULL DEFAULT 1,
+                FOREIGN KEY (key_id) REFERENCES master_password(id)
             )
         ''')
         
@@ -72,7 +75,30 @@ class PasswordManager:
         return self.cursor.fetchone()[0] > 0
 
     def set_master_password(self, master_password):
-        """Configure le mot de passe maître initial"""
+        salt = os.urandom(16)
+        encryption_key = Fernet.generate_key()
+        
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
+        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
+        key_hash = hashlib.sha256(key).hexdigest()
+        
+        self.cursor.execute('''
+            INSERT OR REPLACE INTO master_password (id, salt, key_hash, encryption_key)
+            VALUES (1, ?, ?, ?)
+        ''', (salt, key_hash, encryption_key))
+        self.connection.commit()
+        
+        self.cipher_suite = Fernet(encryption_key)
+
+    def change_master_password(self, old_password, new_password):
+        """Change master password and returns (success, message)"""
+        if not self.verify_master_password(old_password):
+            return False, "Ancien mot de passe incorrect"
+                
+        # Récupérer l'encryption_key existante
+        self.cursor.execute("SELECT encryption_key FROM master_password WHERE id = 1")
+        encryption_key = self.cursor.fetchone()[0]
+                
         salt = os.urandom(16)
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
@@ -80,39 +106,36 @@ class PasswordManager:
             salt=salt,
             iterations=100000,
         )
-        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
+        key = base64.urlsafe_b64encode(kdf.derive(new_password.encode()))
         key_hash = hashlib.sha256(key).hexdigest()
         
         self.cursor.execute('''
-            INSERT OR REPLACE INTO master_password (id, salt, key_hash)
-            VALUES (1, ?, ?)
+            UPDATE master_password 
+            SET salt = ?, key_hash = ?
+            WHERE id = 1
         ''', (salt, key_hash))
         self.connection.commit()
         
-        self.cipher_suite = Fernet(key)
+        # Conserver la même clé de chiffrement
+        self.cipher_suite = Fernet(encryption_key)
+        return True, "Mot de passe maître modifié"
 
     def verify_master_password(self, master_password):
-        """Vérifie si le mot de passe maître est correct"""
-        self.cursor.execute("SELECT salt, key_hash FROM master_password WHERE id = 1")
+        self.cursor.execute("SELECT salt, key_hash, encryption_key FROM master_password WHERE id = 1")
         result = self.cursor.fetchone()
         if not result:
             return False
             
-        salt, stored_hash = result
-        
-        kdf = PBKDF2HMAC(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=salt,
-            iterations=100000,
-        )
+        salt, stored_hash, encryption_key = result
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
         key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
         key_hash = hashlib.sha256(key).hexdigest()
         
         if key_hash == stored_hash:
-            self.cipher_suite = Fernet(key)
+            self.cipher_suite = Fernet(encryption_key)
             return True
         return False
+
 
     def add_to_history(self, password_id, type_action, details=""):
         """Ajoute une action à l'historique"""

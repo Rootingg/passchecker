@@ -30,7 +30,6 @@ class ChangeMasterPasswordDialog(ctk.CTkToplevel):
                      command=self.destroy).pack(side=tk.LEFT, padx=5)
 
     def change_password(self):
-        """Change le mot de passe maître"""
         if self.new_password_entry.get() != self.confirm_entry.get():
             messagebox.showerror("Erreur", "Les nouveaux mots de passe ne correspondent pas!")
             return
@@ -39,13 +38,13 @@ class ChangeMasterPasswordDialog(ctk.CTkToplevel):
             messagebox.showerror("Erreur", "Le nouveau mot de passe doit faire au moins 8 caractères!")
             return
         
-        try:
-            if not self.manager.verify_master_password(self.old_password_entry.get()):
-                messagebox.showerror("Erreur", "Ancien mot de passe incorrect!")
-                return
-            
-            self.manager.set_master_password(self.new_password_entry.get())
-            messagebox.showinfo("Succès", "Mot de passe maître changé avec succès")
+        success, message = self.manager.change_master_password(
+            self.old_password_entry.get(),
+            self.new_password_entry.get()
+        )
+        
+        if success:
+            messagebox.showinfo("Succès", message)
             self.destroy()
-        except Exception as e:
-            messagebox.showerror("Erreur", str(e))
+        else:
+            messagebox.showerror("Erreur", message)
