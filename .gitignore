@@ -1,3 +1,4 @@
 
 *.pyc
 passwords.db
+*.db
