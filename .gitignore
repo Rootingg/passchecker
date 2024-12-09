@@ -1,4 +1,23 @@
-
+# Python caches
+__pycache__/
+*.py[cod]
+*.so
 *.pyc
-passwords.db
+*$py.class
+
+# Database files
 *.db
+passwords.db
+
+# macOS files
+.DS_Store
+**/.DS_Store
+
+# Virtual environment
+myenv/
+venv/
+env/
+
+# IDE files (optionnel)
+.vscode/
+.idea/
