@@ -29,11 +29,11 @@ class PasswordManager:
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 salt BLOB NOT NULL,
                 key_hash TEXT NOT NULL,
-                encryption_key BLOB NOT NULL
+                encrypted_key BLOB NOT NULL
             )
         ''')
         
-        # Table pour les mots de passe stockés
+        # Reste des tables inchangé...
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS stored_passwords (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +45,6 @@ class PasswordManager:
             )
         ''')
         
-        # Table pour les favoris
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS favoris (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +54,6 @@ class PasswordManager:
             )
         ''')
         
-        # Table pour l'historique
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS historique (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,72 +67,101 @@ class PasswordManager:
         
         self.connection.commit()
 
-    def is_initialized(self):
-        """Vérifie si un mot de passe maître existe déjà"""
-        self.cursor.execute("SELECT COUNT(*) FROM master_password")
-        return self.cursor.fetchone()[0] > 0
-
-    def set_master_password(self, master_password):
-        salt = os.urandom(16)
-        encryption_key = Fernet.generate_key()
-        
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
-        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
-        key_hash = hashlib.sha256(key).hexdigest()
-        
-        self.cursor.execute('''
-            INSERT OR REPLACE INTO master_password (id, salt, key_hash, encryption_key)
-            VALUES (1, ?, ?, ?)
-        ''', (salt, key_hash, encryption_key))
-        self.connection.commit()
-        
-        self.cipher_suite = Fernet(encryption_key)
-
-    def change_master_password(self, old_password, new_password):
-        """Change master password and returns (success, message)"""
-        if not self.verify_master_password(old_password):
-            return False, "Ancien mot de passe incorrect"
-                
-        # Récupérer l'encryption_key existante
-        self.cursor.execute("SELECT encryption_key FROM master_password WHERE id = 1")
-        encryption_key = self.cursor.fetchone()[0]
-                
-        salt = os.urandom(16)
+    def derive_key_encryption_key(self, master_password: str, salt: bytes) -> bytes:
+        """Dérive une clé de chiffrement à partir du mot de passe maître pour chiffrer l'encryption_key"""
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
             iterations=100000,
         )
-        key = base64.urlsafe_b64encode(kdf.derive(new_password.encode()))
+        key = kdf.derive(master_password.encode())
+        return base64.urlsafe_b64encode(key)
+
+    def set_master_password(self, master_password):
+        """Configure le mot de passe maître et chiffre l'encryption_key"""
+        salt = os.urandom(16)
+        # Génère la clé qui sera utilisée pour chiffrer les mots de passe
+        encryption_key = Fernet.generate_key()
+        
+        # Dérive une clé pour le hachage de vérification
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
+        key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
         key_hash = hashlib.sha256(key).hexdigest()
         
+        # Dérive une autre clé pour chiffrer l'encryption_key
+        key_encryption_key = self.derive_key_encryption_key(master_password, salt)
+        key_cipher = Fernet(key_encryption_key)
+        encrypted_key = key_cipher.encrypt(encryption_key)
+        
         self.cursor.execute('''
-            UPDATE master_password 
-            SET salt = ?, key_hash = ?
-            WHERE id = 1
-        ''', (salt, key_hash))
+            INSERT OR REPLACE INTO master_password (id, salt, key_hash, encrypted_key)
+            VALUES (1, ?, ?, ?)
+        ''', (salt, key_hash, encrypted_key))
         self.connection.commit()
         
-        # Conserver la même clé de chiffrement
         self.cipher_suite = Fernet(encryption_key)
-        return True, "Mot de passe maître modifié"
 
     def verify_master_password(self, master_password):
-        self.cursor.execute("SELECT salt, key_hash, encryption_key FROM master_password WHERE id = 1")
+        """Vérifie le mot de passe maître et initialise le chiffrement"""
+        self.cursor.execute("SELECT salt, key_hash, encrypted_key FROM master_password WHERE id = 1")
         result = self.cursor.fetchone()
         if not result:
             return False
             
-        salt, stored_hash, encryption_key = result
+        salt, stored_hash, encrypted_key = result
+        
+        # Vérifie le hash du mot de passe
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
         key = base64.urlsafe_b64encode(kdf.derive(master_password.encode()))
         key_hash = hashlib.sha256(key).hexdigest()
         
         if key_hash == stored_hash:
+            # Déchiffre l'encryption_key avec la clé dérivée du mot de passe maître
+            key_encryption_key = self.derive_key_encryption_key(master_password, salt)
+            key_cipher = Fernet(key_encryption_key)
+            encryption_key = key_cipher.decrypt(encrypted_key)
             self.cipher_suite = Fernet(encryption_key)
             return True
         return False
+
+    def change_master_password(self, old_password, new_password):
+        """Change le mot de passe maître et rechiffre l'encryption_key"""
+        if not self.verify_master_password(old_password):
+            return False, "Ancien mot de passe incorrect"
+        
+        # Récupère l'encryption_key actuelle (déjà déchiffrée car verify_master_password a réussi)
+        current_encryption_key = self.cipher_suite._encryption_key
+        
+        # Génère un nouveau salt et chiffre l'encryption_key avec le nouveau mot de passe
+        salt = os.urandom(16)
+        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000)
+        key = base64.urlsafe_b64encode(kdf.derive(new_password.encode()))
+        key_hash = hashlib.sha256(key).hexdigest()
+        
+        # Chiffre l'encryption_key avec le nouveau mot de passe
+        key_encryption_key = self.derive_key_encryption_key(new_password, salt)
+        key_cipher = Fernet(key_encryption_key)
+        encrypted_key = key_cipher.encrypt(current_encryption_key)
+        
+        self.cursor.execute('''
+            UPDATE master_password 
+            SET salt = ?, key_hash = ?, encrypted_key = ?
+            WHERE id = 1
+        ''', (salt, key_hash, encrypted_key))
+        self.connection.commit()
+        
+        return True, "Mot de passe maître modifié"
+
+
+
+    def is_initialized(self):
+        """Vérifie si un mot de passe maître existe déjà"""
+        self.cursor.execute("SELECT COUNT(*) FROM master_password")
+        return self.cursor.fetchone()[0] > 0
+
+
+
 
 
     def add_to_history(self, password_id, type_action, details=""):
